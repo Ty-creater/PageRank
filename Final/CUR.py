@@ -3,14 +3,12 @@ import sys
 import gc
 import time
 
-
-def vectorSamplingBySVD(graph_path, output_path, node_num, sampling_ratio):
+def SVD_Trans(graph_path, output_path, node_num, sampling_ratio):
     import numpy as np
     import scipy as sp
     import scipy.sparse
     import scipy.sparse.linalg
 
-    # 因为存在一些数据集的id不是自增的，所以节点id的最大值可能不是节点总数
     node_set = set()
     with open(graph_path, 'r') as file:
         for line in file:
@@ -21,7 +19,6 @@ def vectorSamplingBySVD(graph_path, output_path, node_num, sampling_ratio):
             to_node = int(data[1])
             node_set.add(from_node)
             node_set.add(to_node)
-
     node_dict = {element: index for index, element in enumerate(node_set)}
     node_dict_t = {index: element for index, element in enumerate(node_set)}
 
@@ -65,13 +62,6 @@ def vectorSamplingBySVD(graph_path, output_path, node_num, sampling_ratio):
     Q = sp.sparse.csr_array(sp.sparse.spdiags(S.T, 0, *A.shape))
     A = Q @ A
 
-    # a_time = time.time()
-    # U, S, VT = sp.sparse.linalg.svds(A, k=3, which='LM')
-    # b_time = time.time()
-    # print(f"execution_time：{b_time-a_time:.2f} s")
-    # print(S)
-    #
-    # sys.exit(0)
 
     print("collect S Q")
     sys.stdout.flush()
@@ -89,22 +79,16 @@ def vectorSamplingBySVD(graph_path, output_path, node_num, sampling_ratio):
     # 抽列
     sub_graph_num = int(n * sampling_ratio)
     selected_node_indices = np.random.choice(A.shape[1], size=sub_graph_num, replace=False, p=col_distribution)
-    # selected_node_indices = np.random.choice(np.arange(0, n), size=sub_graph_num, replace=False)
     selected_sub_matrix = A[:, selected_node_indices]
 
     print("the number of selected_sub_matrix edges: ", selected_sub_matrix.nnz / A.nnz)
-    sys.stdout.flush()
-
-    # sys.exit(0)
-
     print("collect A")
     sys.stdout.flush()
     del A
     gc.collect()
 
+    # SVD分解
     U, S, VT = sp.sparse.linalg.svds(selected_sub_matrix, k=round(math.sqrt(sub_graph_num)), which='LM')
-    # U, S, VT = sp.sparse.linalg.svds(A, k=round(math.sqrt(n)/8), which='LM')
-    # print(round(math.sqrt(n)/8))
     sp_U = sp.sparse.csr_array(U)
     sp_VT = sp.sparse.csr_array(VT)
 
@@ -114,26 +98,15 @@ def vectorSamplingBySVD(graph_path, output_path, node_num, sampling_ratio):
     del VT
     gc.collect()
 
-    # select_col_one_U = sp_U[:, [0]]
-    # select_row_one_VT = sp_VT[[0]]
-    # select_one_S = S[0]
-    # t = select_col_one_U * select_one_S
-    # test_matrix = select_col_one_U @ select_row_one_VT
-
-    from sklearn.preprocessing import normalize
-    # sp_U = normalize(sp_U, norm='l1', axis=1)
-    # sp_VT = normalize(sp_VT, norm='l1', axis=1)
+    # 计算PageRank
     R = np.repeat(1.0 / n, n)
     P = np.repeat(1.0 / n, n)
 
     alpha = 0.85
     tol = 1 / node_num / 10
     for _ in range(sys.maxsize):
-        # print("the number of iterations: ", _ + 1)
-        # sys.stdout.flush()
         R_last = R
         R = R @ sp_U * S @ sp_VT
-        # R = (abs(R) * sampling_ratio) / np.linalg.norm(R, ord=1)
         t = np.repeat(1.0 / n, n)
         t[selected_node_indices] = R
         R = alpha * t + (1 - alpha) * P
@@ -153,13 +126,12 @@ def vectorSamplingBySVD(graph_path, output_path, node_num, sampling_ratio):
                 break
 
 
-def vectorSamplingByCUR(graph_path, output_path, node_num, sampling_ratio, row_sampling_ration):
+def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ration):
     import numpy as np
     import scipy as sp
     import scipy.sparse
     import scipy.sparse.linalg
 
-    # 因为存在一些数据集的id不是自增的，所以节点id的最大值可能不是节点总数
     node_set = set()
     with open(graph_path, 'r') as file:
         for line in file:
@@ -170,7 +142,6 @@ def vectorSamplingByCUR(graph_path, output_path, node_num, sampling_ratio, row_s
             to_node = int(data[1])
             node_set.add(from_node)
             node_set.add(to_node)
-
     node_dict = {element: index for index, element in enumerate(node_set)}
     node_dict_t = {index: element for index, element in enumerate(node_set)}
 
@@ -243,6 +214,7 @@ def vectorSamplingByCUR(graph_path, output_path, node_num, sampling_ratio, row_s
     C = A[:, sampled_col_index]
     R = A[sampled_row_index, :]
 
+    # TODO 如果需要做scaling，则需要下面的代码
     # # 对C和R矩阵除以比重
     # # 行遍历
     # for i in range(R.shape[0]):
@@ -266,13 +238,14 @@ def vectorSamplingByCUR(graph_path, output_path, node_num, sampling_ratio, row_s
 
     W = A[sampled_row_index][:, sampled_col_index]
 
-    # 获取W的秩
-    rank_start_time = time.time()
-    _, s, _ = sp.sparse.linalg.svds(W, k=min(W.shape[0], W.shape[1]) - 1)
-    # 计算秩
-    rank_sparse = np.sum(s > 1e-10)
-    print("稀疏矩阵的秩:", rank_sparse)
-    rank_end_time = time.time()
+    # TODO 测W的秩
+    # # 获取W的秩
+    # rank_start_time = time.time()
+    # _, s, _ = sp.sparse.linalg.svds(W, k=min(W.shape[0], W.shape[1]) - 1)
+    # # 计算秩
+    # rank_sparse = np.sum(s > 1e-10)
+    # print("稀疏矩阵的秩:", rank_sparse)
+    # rank_end_time = time.time()
 
     A_nnz = A.nnz
 
@@ -287,22 +260,13 @@ def vectorSamplingByCUR(graph_path, output_path, node_num, sampling_ratio, row_s
     print("the number of W edges: ", W.nnz / A_nnz)
     sys.stdout.flush()
 
-    # sys.exit(0)
-
     # 对W进行SVD，然后得到U
     X, Z, YT = sp.sparse.linalg.svds(W, k=round(math.sqrt(min(W.shape[0], W.shape[1]))), which='LM')
-    rank_ratio = np.sum(Z) / np.sum(s)
-    print("k:", round(math.sqrt(min(W.shape[0], W.shape[1]))))
-    print("rank power ratio:", rank_ratio)
+    # rank_ratio = np.sum(Z) / np.sum(s)
+    # print("k:", round(math.sqrt(min(W.shape[0], W.shape[1]))))
+    # print("rank power ratio:", rank_ratio)
     Z = (1 / Z) ** 2
-    # YT = YT.astype(np.float8)
-    # Z = Z.astype(np.float8)
-    # X = X.astype(np.float8)
     U = YT.transpose() @ np.diag(Z) @ X.transpose()
-    # X = sp.sparse.csr_matrix(X)
-    # Z = sp.sparse.diags(Z)
-    # YT = sp.sparse.csc_matrix(YT)
-    # U = YT.transpose() @ Z @ X.transpose()
     print("collect X Z YT")
     del X
     del Z
@@ -310,29 +274,23 @@ def vectorSamplingByCUR(graph_path, output_path, node_num, sampling_ratio, row_s
     sys.stdout.flush()
 
     # 计算PageRank
-    from sklearn.preprocessing import normalize
-    sp_C = normalize(C, norm='l1', axis=1)
-    sp_R = normalize(R, norm='l1', axis=1)
+    sp_C = C
+    sp_R = R
     R = np.repeat(1.0 / n, n)
+    R = U @ sp_R @ R
     P = np.repeat(1.0 / n, n)
-
     alpha = 0.85
     tol = 1 / node_num / 10
     for _ in range(sys.maxsize):
         R_last = R
         R = R @ sp_C @ U @ sp_R
-        # R = abs(R) / np.linalg.norm(R, ord=1)
         R = alpha * R + (1 - alpha) * P
         # 计算误差
         err = np.absolute(R - R_last).sum()
         if err < n * tol:
-            # maxR = max(R)
-            # minR = min(R)
-            # R = (R - minR) / (maxR - minR)
-            # R = R / np.linalg.norm(R, ord=1)
             R = abs(R) / np.linalg.norm(R, ord=1)
             end_time = time.time()
-            execution_time = end_time - start_time - (rank_end_time - rank_start_time)
+            execution_time = end_time - start_time
             print(f"execution_time：{execution_time:.2f} s")
             print("the number of iterations: ", _ + 1)
             # 保存结果
@@ -350,8 +308,8 @@ output_path = args[3]
 sampling_ratio = float(args[4])
 node_num = int(args[5])
 
-if algorithm == "svd":
-    vectorSamplingBySVD(graph_path, output_path, node_num, sampling_ratio)
-elif algorithm == "cur":
+if algorithm == "SVD_Trans":
+    SVD_Trans(graph_path, output_path, node_num, sampling_ratio)
+elif algorithm == "CUR_Trans":
     row_sampling_ration = float(args[6])
-    vectorSamplingByCUR(graph_path, output_path, node_num, sampling_ratio, row_sampling_ration)
+    CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ration)
