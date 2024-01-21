@@ -10,11 +10,11 @@ from networkit.centrality import PageRank
 import gc
 
 
-# 使用Networkit来计算原图的PageRank，用于实验的 ground truth
+# Use Networkit to calculate the PageRank of the original graph for the ground truth of the experiment
 def computeGlobalPageRankWithNetworkit(graph_path, output_path):
-    # TODO 因为不是所有的数据集的节点id都是按顺递增的，而Networkit构建的图需要严格递增，因此做一层节点映射（下同）。
-    node_set = set()  # 节点集合（去重）
-    original_edges = []  # 将边集加载到内存中，后续方法（如果出现是为了让方法之间的时间具有可比性，因为读磁盘与读内存速度差很多），这里该步骤可省去。
+    # TODO Because not all datasets have node ids that are incremented by smooth, and the graph constructed by Networkit needs to be strictly incremental, a layer of node mapping is done (below).
+    node_set = set()  # Collection of nodes (de-duplication)
+    original_edges = []  # Load the set of edges into memory, and subsequent methods (if they appear to make the time comparable between methods, since there is a large speed difference between reading disk and reading memory), that step can be omitted here.
     with open(graph_path, 'r') as file:
         lines = file.readlines()
         for line in lines:
@@ -28,10 +28,10 @@ def computeGlobalPageRankWithNetworkit(graph_path, output_path):
             node_set.add(to_node)
     del lines
     gc.collect()
-    node_dict = {element: index for index, element in enumerate(node_set)}  # 节点id:原图index
-    node_dict_t = {index: element for index, element in enumerate(node_set)}  # 原图index:节点id
+    node_dict = {element: index for index, element in enumerate(node_set)}  # node id : original index
+    node_dict_t = {index: element for index, element in enumerate(node_set)}  # original index : node id
 
-    # 构建图
+    # construct graph
     G = nk.Graph(directed=True, n=len(node_dict))
     for from_node, to_node in original_edges:
         from_node_index = node_dict[from_node]
@@ -39,14 +39,14 @@ def computeGlobalPageRankWithNetworkit(graph_path, output_path):
         G.addEdge(from_node_index, to_node_index)
         G.addEdge(to_node_index, from_node_index)
 
-    # 初始化PageRank对象
+    # init PageRank object
     pr = nk.centrality.PageRank(G, tol=1 / len(node_dict) / 100, damp=0.85)
-    # 开始计算PageRank
+    # start compute PageRank
     pr.run()
-    # 获取PageRank结果
+    # get PageRank result
     pagerank_scores = pr.scores()
 
-    # 持久化
+    # Persistence
     with open(output_path, 'w+') as file:
         for node, pagerank in enumerate(pagerank_scores):
             file.write(f"{node_dict_t[node]}\t{pagerank:.17f}\n")
@@ -68,12 +68,12 @@ def PER_PR(graph_path, output_path, theta):
     del lines
     gc.collect()
 
-    start_time = time.time()  # 开始计时
+    start_time = time.time()  # start timing
 
-    # 构图
+    # construct graph
     for from_node, to_node in original_edges:
         random_number = random.uniform(0, 1)
-        if random_number < theta:  # 按比例
+        if random_number < theta:  # proportional
             count += 1
             G.addEdge(from_node - 1, to_node - 1, addMissing=True)
             G.addEdge(to_node - 1, from_node - 1)
@@ -81,7 +81,7 @@ def PER_PR(graph_path, output_path, theta):
     del original_edges
     gc.collect()
 
-    # 统计非孤立节点，并最后只持久化非孤立节点的PageRank
+    # Count non-isolated nodes and finally persist the PageRank of only non-isolated nodes
     sub_nodes = set()
     for node in G.iterNodes():
         if G.degreeIn(node) != 0 or G.degreeOut(node) != 0:
@@ -89,18 +89,18 @@ def PER_PR(graph_path, output_path, theta):
     print(f"After Edge Sparsification, the number of nodes: {len(sub_nodes)}")
     sys.stdout.flush()
 
-    # 计算PageRank
+    # compute PageRank
     pr = nk.centrality.PageRank(G, tol=1/G.numberOfNodes()/10, damp=0.85)
     pr.run()
     pagerank_scores = pr.scores()
 
-    # 结束计时
+    # stop timing
     end_time = time.time()
     execution_time = end_time - start_time
     print(f"execution_time：{execution_time:.2f} s")
     print("the number of iterations: ", pr.numberOfIterations())
 
-    # 持久化
+    # Persistence
     with open(output_path, 'w+') as file:
         for node, pagerank in enumerate(pagerank_scores):
             if node in sub_nodes:
@@ -109,7 +109,7 @@ def PER_PR(graph_path, output_path, theta):
 
 def DSPI(graph_path, output_path, alpha, theta):
     node_set = set()
-    node_degree = {}  # 统计每个点的度
+    node_degree = {}  # Counting the degree of each node
     with open(graph_path, 'r') as file:
         for line in file:
             if line.startswith('%') or line.startswith('#'):
@@ -127,15 +127,15 @@ def DSPI(graph_path, output_path, alpha, theta):
                 node_degree[to_node] += 1
             else:
                 node_degree[to_node] = 1
-    node_dict = {element: index for index, element in enumerate(node_set)}  # 节点id:原图index
-    node_dict_t = {index: element for index, element in enumerate(node_set)}  # 原图index:节点id
+    node_dict = {element: index for index, element in enumerate(node_set)}
+    node_dict_t = {index: element for index, element in enumerate(node_set)}
     del node_set
     gc.collect()
 
     print("start construct graph")
     sys.stdout.flush()
     frobenius_norm = 0
-    # 构建原始图，并计算F范数所需的数据
+    # Construct the original graph and compute the data needed for the F-paradigm
     G = nk.Graph(directed=True, weighted=True, n=len(node_dict))
     with open(graph_path, 'r') as file:
         for line in file:
@@ -153,9 +153,9 @@ def DSPI(graph_path, output_path, alpha, theta):
     del node_degree
     gc.collect()
 
-    # 原图的边数和节点数
+    # Number of edges and nodes of the original graph
     original_edges_num = G.numberOfEdges()
-    # F范数
+    # F-paradigm
     frobenius_norm = math.sqrt(frobenius_norm)
     s = original_edges_num / alpha
     delta = theta * frobenius_norm / math.sqrt(s)
@@ -166,11 +166,10 @@ def DSPI(graph_path, output_path, alpha, theta):
     print(f"deltaC: {deltaC}")
     sys.stdout.flush()
 
-    # 开始计时
     start_time = time.time()
 
-    count_edges = 0  # 采样的边数
-    need_add = []  # 需要添加的边，因为networkit不能边遍历边对边进行修改，所以需要重新构图
+    count_edges = 0  # Number of edges sampled
+    need_add = []  # Edges that need to be added, since networkit can't traverse the edges as it goes along, so it needs to be recomposed
     for node in G.iterNodes():
         for (out_node, weight) in G.iterNeighborsWeights(node):
             if weight > delta:
@@ -186,7 +185,7 @@ def DSPI(graph_path, output_path, alpha, theta):
     del G
     gc.collect()
 
-    # 开始构建所需的子图
+    # Start building the required subgraphs
     print("start construct new graph")
     sys.stdout.flush()
     G2 = nk.Graph(directed=True, weighted=True, n=len(node_dict))
@@ -205,17 +204,16 @@ def DSPI(graph_path, output_path, alpha, theta):
     print("start compute pagerank")
     sys.stdout.flush()
 
-    # 计算PageRank
+    # compute PageRank
     pr = nk.centrality.PageRank(G2, tol=1e-6, damp=0.85, distributeSinks=True)
     # pr.maxIterations = 100
     pr.run()
     pagerank_scores = pr.scores()
-    end_time = time.time()  # 结束计时
+    end_time = time.time()
     execution_time = end_time - start_time
     print(f"execution_time：{execution_time:.2f} s")
     print("the number of iterations: ", pr.numberOfIterations())
 
-    # 持久化
     with open(output_path, 'w+') as file:
         for node, pagerank in enumerate(pagerank_scores):
             if node in sub_nodes:
@@ -241,7 +239,7 @@ def ApproxRank(graph_path, output_path, node_num, sampling_ratio):
     del node_set
     gc.collect()
 
-    # 加载数据
+    # Load data
     row, col = [], []
     with open(graph_path, 'r') as file:
         for line in file:
@@ -256,7 +254,7 @@ def ApproxRank(graph_path, output_path, node_num, sampling_ratio):
             col.append(node_dict[from_node])
     data = np.ones(len(row))
 
-    # 生成转移矩阵A
+    # Generate the transfer matrix A
     n = node_num
     A = sp.sparse.coo_array((data, (row, col)), shape=(n, n), dtype=float)
     S = A.sum(axis=1)
@@ -269,34 +267,34 @@ def ApproxRank(graph_path, output_path, node_num, sampling_ratio):
     del node_dict
     gc.collect()
 
-    start_time = time.time()  # 开始计时
+    start_time = time.time()
 
     print("start construct new matrix")
     sys.stdout.flush()
 
-    # TODO：转移矩阵左上角
+    # TODO：Upper left corner of the transfer matrix
     sub_graph_num = int(n * sampling_ratio)
     selected_node_indices = np.random.choice(np.arange(0, n), size=sub_graph_num, replace=False)
     upper_left = A[selected_node_indices][:, selected_node_indices]
 
-    # TODO：转移矩阵左下角
+    # TODO：Lower left corner of the transfer matrix
     sum_vector = np.array(A.sum(axis=0)) - np.array(A[selected_node_indices, :].sum(axis=0))
     lower_left_selected = sum_vector[selected_node_indices]
     lower_left = lower_left_selected / (n - len(selected_node_indices))
 
-    # TODO：转移矩阵右上角和转移矩阵右下角
+    # TODO：Top right corner of the transfer matrix and bottom right corner of the transfer matrix
     vstack_result = sp.sparse.vstack([upper_left, sp.sparse.csr_matrix(lower_left)])
     right_column = 1 - np.array(vstack_result.sum(axis=1)).flatten()
     final_matrix = sp.sparse.hstack([vstack_result, sp.sparse.csr_matrix(right_column).T])
     print("the number of subgraph's edges: ", final_matrix.nnz / A.nnz)
     sys.stdout.flush()
 
-    # 初始向量
+    # initial vector
     R_1 = np.repeat(1.0 / n, sub_graph_num)
     R_2 = np.array([(n - sub_graph_num) / n])
     R = np.concatenate((R_1, R_2))
 
-    # 跳转概率分布
+    # Jump Probability Distribution
     P_1 = np.repeat(1.0 / n, sub_graph_num)
     P_2 = np.array([(n - sub_graph_num) / n])
     P = np.concatenate((P_1, P_2))
@@ -304,16 +302,16 @@ def ApproxRank(graph_path, output_path, node_num, sampling_ratio):
     print("start compute pagerank")
     sys.stdout.flush()
 
-    # PageRank迭代
+    # PageRank Iteration
     alpha = 0.85
     tol = 1 / node_num / 10
     for _ in range(sys.maxsize):
         R_last = R
         R = alpha * (R @ final_matrix) + (1 - alpha) * P
-        # 计算误差
+        # calculate error
         err = np.absolute(R - R_last).sum()
         if err < (sub_graph_num + 1) * tol:
-            # 保存结果
+            # Save results
             end_time = time.time()
             execution_time = end_time - start_time
             print(f"execution_time：{execution_time:.2f} s")
@@ -345,16 +343,16 @@ def LocalPR(graph_path, output_path, sampling_num, edges_ration):
     del node_set
     gc.collect()
 
-    # 原始图
+    # original graph
     G = nk.Graph(directed=True, n=len(node_dict))
     with open(graph_path, 'r') as file:
         for line in file:
             if line.startswith('%') or line.startswith('#'):
                 continue
             data = line.strip().split()
-            from_node = int(data[0])  # 节点id
+            from_node = int(data[0])
             to_node = int(data[1])
-            from_node_index = node_dict[from_node]  # 原图index
+            from_node_index = node_dict[from_node]
             to_node_index = node_dict[to_node]
             G.addEdge(from_node_index, to_node_index)
             G.addEdge(to_node_index, from_node_index)
@@ -364,19 +362,19 @@ def LocalPR(graph_path, output_path, sampling_num, edges_ration):
 
     start_time = time.time()
 
-    # 目标节点集（随机抽）
+    # Target node set (random sample)
     target_nodes = np.random.choice(range(0, len(node_dict_t)), sampling_num, replace=False)
 
-    result = {}  # 保存PageRank结果
+    result = {}  # Save PageRank results
     for u in target_nodes:
         if len(result) % 100 == 0:
             print("the number of completed nodes: ", len(result))
             sys.stdout.flush()
         pr_u = (1 - 0.85) / len(node_dict)
         layer = {u: 1}
-        # 统计计算这个节点会访问多少条不同的边
+        # Statistically calculate how many different edges this node will visit
         visited_edges = set()
-        # 开始BFS扩展
+        # Starting BFS Extension
         for _ in range(10):
             if len(result) == 0:
                 print("the first node is computing, and layer is ", _)
@@ -391,7 +389,7 @@ def LocalPR(graph_path, output_path, sampling_num, edges_ration):
                         layer_next[in_node] += inf / G.degreeOut(in_node)
                     else:
                         layer_next[in_node] = inf / G.degreeOut(in_node)
-                    if len(visited_edges) / original_edges_nums > edges_ration:  # 当前计算的节点，BFS扩展的边数达到要求之后，不在扩展
+                    if len(visited_edges) / original_edges_nums > edges_ration:  # Currently computing node, BFS expansion is not expanding after the required number of edges are reached
                         flag = True
                         break
                 if flag:
@@ -433,16 +431,16 @@ def LPRAP(graph_path, output_path, sampling_num, edges_ration, T):
     del node_set
     gc.collect()
 
-    # 原始图
+    # original graph
     G = nk.Graph(directed=True)
     with open(graph_path, 'r') as file:
         for line in file:
             if line.startswith('%') or line.startswith('#'):
                 continue
             data = line.strip().split()
-            from_node = int(data[0])  # 节点id
+            from_node = int(data[0])
             to_node = int(data[1])
-            from_node_index = node_dict[from_node]  # 原图index
+            from_node_index = node_dict[from_node]
             to_node_index = node_dict[to_node]
             G.addEdge(from_node_index, to_node_index, addMissing=True)
             G.addEdge(to_node_index, from_node_index)
@@ -452,7 +450,7 @@ def LPRAP(graph_path, output_path, sampling_num, edges_ration, T):
 
     start_time = time.time()
 
-    # 目标节点集
+    # target node set
     target_nodes = np.random.choice(range(0, len(node_dict_t)), sampling_num, replace=False)
 
     result = {}
@@ -472,7 +470,7 @@ def LPRAP(graph_path, output_path, sampling_num, edges_ration, T):
             layer_next = {}
             for node, inf in layer.items():
                 flag = False
-                if inf * pow(0.85, _) < T:  # 如果小于给定阈值，也不在扩展该边
+                if inf * pow(0.85, _) < T:  # If it is less than the given threshold, it is also not extending the edge
                     continue
                 for in_node in G.iterInNeighbors(node):
                     visited_edges.add((in_node, node))

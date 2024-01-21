@@ -27,7 +27,7 @@ def SVD_Trans(graph_path, output_path, node_num, sampling_ratio):
     del node_set
     gc.collect()
 
-    # 加载数据
+    # load data
     row, col = [], []
     with open(graph_path, 'r') as file:
         for line in file:
@@ -47,7 +47,7 @@ def SVD_Trans(graph_path, output_path, node_num, sampling_ratio):
     del node_dict
     gc.collect()
 
-    # 生成转移矩阵A
+    # Generate the transfer matrix A
     n = node_num
     A = sp.sparse.coo_array((data, (row, col)), shape=(n, n), dtype=float)
 
@@ -69,14 +69,14 @@ def SVD_Trans(graph_path, output_path, node_num, sampling_ratio):
     del Q
     gc.collect()
 
-    # 计算列分布
+    # Calculate the column distribution
     total_sums = A.power(2).sum()
     col_sums = A.power(2).sum(axis=0)
     col_distribution = col_sums / total_sums
 
     start_time = time.time()
 
-    # 抽列
+    # sample col
     sub_graph_num = int(n * sampling_ratio)
     selected_node_indices = np.random.choice(A.shape[1], size=sub_graph_num, replace=False, p=col_distribution)
     selected_sub_matrix = A[:, selected_node_indices]
@@ -87,7 +87,7 @@ def SVD_Trans(graph_path, output_path, node_num, sampling_ratio):
     del A
     gc.collect()
 
-    # SVD分解
+    # SVD decomposition
     U, S, VT = sp.sparse.linalg.svds(selected_sub_matrix, k=round(math.sqrt(sub_graph_num)), which='LM')
     sp_U = sp.sparse.csr_array(U)
     sp_VT = sp.sparse.csr_array(VT)
@@ -98,7 +98,7 @@ def SVD_Trans(graph_path, output_path, node_num, sampling_ratio):
     del VT
     gc.collect()
 
-    # 计算PageRank
+    # compute PageRank
     R = np.repeat(1.0 / n, n)
     P = np.repeat(1.0 / n, n)
 
@@ -110,7 +110,7 @@ def SVD_Trans(graph_path, output_path, node_num, sampling_ratio):
         t = np.repeat(1.0 / n, n)
         t[selected_node_indices] = R
         R = alpha * t + (1 - alpha) * P
-        # 计算误差
+        # calculate error
         err = np.absolute(R - R_last).sum()
         if err < n * sampling_ratio * tol:
             R = abs(R) / np.linalg.norm(R, ord=1)
@@ -118,7 +118,7 @@ def SVD_Trans(graph_path, output_path, node_num, sampling_ratio):
             execution_time = end_time - start_time
             print(f"execution_time：{execution_time:.2f} s")
             print("the number of iterations: ", _ + 1)
-            # 保存结果
+            # Save results
             R = R / np.linalg.norm(R, ord=1)
             with open(output_path, 'w+') as file:
                 for i in selected_node_indices:
@@ -150,7 +150,7 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
     del node_set
     gc.collect()
 
-    # 加载数据
+    # load data
     row, col = [], []
     with open(graph_path, 'r') as file:
         for line in file:
@@ -170,7 +170,7 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
     del node_dict
     gc.collect()
 
-    # 生成转移矩阵A
+    # Generate the transfer matrix A
     n = node_num
     A = sp.sparse.coo_array((data, (row, col)), shape=(n, n), dtype=float)
 
@@ -191,7 +191,7 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
     del Q
     gc.collect()
 
-    # 计算行和列分布
+    # Calculating row and column distributions
     total_sums = A.power(2).sum()
     col_sums = A.power(2).sum(axis=0)
     row_sums = A.power(2).sum(axis=1)
@@ -206,7 +206,7 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
 
     start_time = time.time()
 
-    # 按照行列分布抽取行和列构成U和R矩阵
+    # The rows and columns are extracted according to the row-column distribution to form the U and R matrices
     sampled_col_index = np.random.choice(A.shape[1], size=int(node_num * sampling_ratio), replace=False, p=col_distribution)
     sampled_row_index = np.random.choice(A.shape[0], size=int(node_num * row_sampling_ration), replace=False, p=row_distribution)
     sampled_col_index.sort()
@@ -214,9 +214,9 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
     C = A[:, sampled_col_index]
     R = A[sampled_row_index, :]
 
-    # TODO 如果需要做scaling，则需要下面的代码
-    # # 对C和R矩阵除以比重
-    # # 行遍历
+    # TODO If you need to do scaling, you need the following code
+    # # Divide the C and R matrices by the specific gravity
+    # # row traversal
     # for i in range(R.shape[0]):
     #     start_idx = R.indptr[i]
     #     end_idx = R.indptr[i + 1]
@@ -226,7 +226,7 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
     #         value = R.data[j]
     #         R[i, col_idx] = value / row_distribution[sampled_row_index[i]]
     #
-    # # 列遍历
+    # # col traversal
     # C = sp.sparse.csc_array(C)
     # for j in range(C.shape[1]):
     #     start_idx = C.indptr[j]
@@ -238,13 +238,11 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
 
     W = A[sampled_row_index][:, sampled_col_index]
 
-    # TODO 测W的秩
-    # # 获取W的秩
+    # TODO Compute the rank of W
     # rank_start_time = time.time()
     # _, s, _ = sp.sparse.linalg.svds(W, k=min(W.shape[0], W.shape[1]) - 1)
-    # # 计算秩
     # rank_sparse = np.sum(s > 1e-10)
-    # print("稀疏矩阵的秩:", rank_sparse)
+    # print("rank:", rank_sparse)
     # rank_end_time = time.time()
 
     A_nnz = A.nnz
@@ -260,7 +258,7 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
     print("the number of W edges: ", W.nnz / A_nnz)
     sys.stdout.flush()
 
-    # 对W进行SVD，然后得到U
+    # SVD on W and then obtain U
     X, Z, YT = sp.sparse.linalg.svds(W, k=round(math.sqrt(min(W.shape[0], W.shape[1]))), which='LM')
     # rank_ratio = np.sum(Z) / np.sum(s)
     # print("k:", round(math.sqrt(min(W.shape[0], W.shape[1]))))
@@ -273,7 +271,7 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
     del YT
     sys.stdout.flush()
 
-    # 计算PageRank
+    # compute PageRank
     sp_C = C
     sp_R = R
     R = np.repeat(1.0 / n, n)
@@ -285,7 +283,7 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
         R_last = R
         R = R @ sp_C @ U @ sp_R
         R = alpha * R + (1 - alpha) * P
-        # 计算误差
+        # calculate error
         err = np.absolute(R - R_last).sum()
         if err < n * tol:
             R = abs(R) / np.linalg.norm(R, ord=1)
@@ -293,7 +291,7 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
             execution_time = end_time - start_time
             print(f"execution_time：{execution_time:.2f} s")
             print("the number of iterations: ", _ + 1)
-            # 保存结果
+            # Save results
             R = R / np.linalg.norm(R, ord=1)
             with open(output_path, 'w+') as file:
                 for i in range(len(node_dict_t)):

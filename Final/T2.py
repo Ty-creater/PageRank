@@ -24,7 +24,7 @@ def T2(graph_path, output_path, sampling_ratio):
     del node_set
     gc.collect()
 
-    # 加载数据
+    # load data
     row, col = [], []
     with open(graph_path, 'r') as file:
         for line in file:
@@ -39,7 +39,7 @@ def T2(graph_path, output_path, sampling_ratio):
             col.append(node_dict[from_node])
     data = np.ones(len(row))
 
-    # 生成转移矩阵A
+    # Generate the transfer matrix A
     n = len(node_dict_t)
     A = sp.sparse.coo_array((data, (row, col)), shape=(n, n), dtype=float)
     S = A.sum(axis=1)
@@ -52,48 +52,48 @@ def T2(graph_path, output_path, sampling_ratio):
     del node_dict
     gc.collect()
 
-    # 原图的边数
+    # Number of edges of the original graph
     original_edges_num = A.nnz
 
-    # TODO 不同分布抽点
-    # 计算p分布（使用行和列范数）
+    # TODO Use different distributions to pump nodes
+    # Calculate p-distribution (using row and column f paradigms)
     col_sums = A.power(2).sum(axis=0)
     row_sums = A.power(2).sum(axis=1)
     p = np.multiply(col_sums, row_sums)
     probabilities = p / sum(p)
 
-    # 列范数抽
+    # column f paradigms
     # total_sums = A.power(2).sum()
     # col_sums = A.power(2).sum(axis=0)
     # col_distribution = col_sums / total_sums
 
-    # 行范数抽
+    # row f paradigms
     # total_sums = A.power(2).sum()
     # row_sums = A.power(2).sum(axis=1)
     # row_distribution = row_sums / total_sums
 
-    start_time = time.time()  # 开始计时
+    start_time = time.time()
 
     c = int(len(node_dict_t) * sampling_ratio)
-    # 使用行和列范数分布抽
+    # using row and column f paradigms
     sampled_index = np.random.choice(A.shape[1], size=c, replace=False, p=probabilities)
-    # # 列范数分布抽
+    # # column f paradigms
     # sampled_index = np.random.choice(A.shape[1], size=c, replace=False, p=col_distribution)
-    # # 行范数分布抽
+    # # row f paradigms
     # sampled_index = np.random.choice(A.shape[1], size=c, replace=False, p=row_distribution)
-    # # 均匀分布抽
+    # # uniform distribution
     # sampled_index = np.random.choice(A.shape[1], size=c, replace=False, p=None)
     sampled_index.sort()
-    C = A[:, sampled_index]  # 列向量，n*c
+    C = A[:, sampled_index]  # column vector，n*c
     C = sp.sparse.csc_array(C)
-    R = A[sampled_index, :]  # 行向量，c*n
+    R = A[sampled_index, :]  # row vector，c*n
 
     print("the number of C edges: ", C.nnz / original_edges_num)
     sys.stdout.flush()
 
-    ## TODO 如果要做Scaling的话，需要以下代码
+    ## TODO If you want to do Scaling, you need the following code
     # probabilities = np.sqrt(probabilities * c)
-    # # 行遍历
+    # # row traversal
     # for i in range(R.shape[0]):
     #     start_idx = R.indptr[i]
     #     end_idx = R.indptr[i + 1]
@@ -103,7 +103,7 @@ def T2(graph_path, output_path, sampling_ratio):
     #         value = R.data[j]
     #         R[i, col_idx] = value / probabilities[sampled_index[i]]
     #
-    # # 列遍历
+    # # col traversal
     # for j in range(C.shape[1]):
     #     start_idx = C.indptr[j]
     #     end_idx = C.indptr[j + 1]
@@ -115,7 +115,7 @@ def T2(graph_path, output_path, sampling_ratio):
     print("start compute pagerank")
     sys.stdout.flush()
 
-    # 开始迭代计算PageRank
+    # Start iterative PageRank calculation
     r = np.repeat(1.0 / n, n)
     P = np.repeat(1.0 / n, n)
     c_v = np.repeat(1.0 / c, c)
@@ -127,7 +127,7 @@ def T2(graph_path, output_path, sampling_ratio):
         r = C @ r
         r = R @ r
         r = (1 - pow(alpha, 2)) * r + pow(alpha, 2) * c_v
-        # 计算误差
+        # calculate error
         err = np.absolute(r - r_last).sum()
         if err < c * tol:
             r = C @ r
@@ -137,7 +137,7 @@ def T2(graph_path, output_path, sampling_ratio):
             execution_time = end_time - start_time
             print(f"execution_time：{execution_time:.2f} s")
             print("the number of iterations: ", _ + 1)
-            # 保存结果
+            # Save results
             with open(output_path, 'w+') as file:
                 for i in range(len(node_dict_t)):
                     file.write(f"{node_dict_t[i]}\t{r[i]:.17f}\n")
