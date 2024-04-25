@@ -218,7 +218,6 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
     # for i in range(R.shape[0]):
     #     start_idx = R.indptr[i]
     #     end_idx = R.indptr[i + 1]
-    #     # 遍历当前行的非零元素
     #     for j in range(start_idx, end_idx):
     #         col_idx = R.indices[j]
     #         value = R.data[j]
