@@ -196,7 +196,7 @@ def DSPI(graph_path, output_path, alpha, theta):
     gc.collect()
 
     print("the number of subgraph's edges: ", count_edges / original_edges_num)
-    sub_nodes = set()  # 同上
+    sub_nodes = set()
     for node in G2.iterNodes():
         if G2.degreeIn(node) != 0 or G2.degreeOut(node) != 0:
             sub_nodes.add(node)

@@ -62,7 +62,6 @@ def SVD_Trans(graph_path, output_path, node_num, sampling_ratio):
     Q = sp.sparse.csr_array(sp.sparse.spdiags(S.T, 0, *A.shape))
     A = Q @ A
 
-
     print("collect S Q")
     sys.stdout.flush()
     del S
@@ -119,7 +118,6 @@ def SVD_Trans(graph_path, output_path, node_num, sampling_ratio):
             print(f"execution_time：{execution_time:.2f} s")
             print("the number of iterations: ", _ + 1)
             # Save results
-            R = R / np.linalg.norm(R, ord=1)
             with open(output_path, 'w+') as file:
                 for i in selected_node_indices:
                     file.write(f"{node_dict_t[i]}\t{R[i]:.17f}\n")
@@ -292,7 +290,6 @@ def CUR_Trans(graph_path, output_path, node_num, sampling_ratio, row_sampling_ra
             print(f"execution_time：{execution_time:.2f} s")
             print("the number of iterations: ", _ + 1)
             # Save results
-            R = R / np.linalg.norm(R, ord=1)
             with open(output_path, 'w+') as file:
                 for i in range(len(node_dict_t)):
                     file.write(f"{node_dict_t[i]}\t{R[i]:.17f}\n")
